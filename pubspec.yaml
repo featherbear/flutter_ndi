@@ -1,12 +1,11 @@
 name: flutter_ndi
 description: A new flutter plugin project.
 version: 0.0.1
-author:
 homepage:
 
 environment:
-  sdk: ">=2.7.0 <3.0.0"
-  flutter: ">=1.20.0 <2.0.0"
+  sdk: ">=2.12.0 <3.0.0"
+  flutter: ">=1.20.0"
 
 dependencies:
   flutter:
@@ -29,6 +28,10 @@ flutter:
     platforms:
       android:
         package: com.example.flutter_ndi
+        pluginClass: FlutterNdiPlugin
+      ios:
+        pluginClass: FlutterNdiPlugin
+      windows:
         pluginClass: FlutterNdiPlugin
 
   # To add assets to your plugin package, add an assets section, like this:
