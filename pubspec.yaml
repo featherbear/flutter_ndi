@@ -23,6 +23,9 @@ ffigen:
   headers:
     entry-points:
       - 'lib/ndi/includes/Processing.NDI.Lib.h'
+  comments:
+    style: any
+    length: full
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
