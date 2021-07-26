@@ -86,7 +86,7 @@ abstract class FlutterNdi {
     return result;
   }
 
-  static Stream listenToFrameData(NDISource source) {
+  static ReceivePort listenToFrameData(NDISource source) {
     // FlutterNdi.libNDI.NDIlib_recv_create_v3()
     var source_t = malloc<NDIlib_source_t>();
 
@@ -105,14 +105,14 @@ abstract class FlutterNdi {
 
     Pointer<Void> Receiver = libNDI.NDIlib_recv_create_v3(recvDescription);
 
-    StreamController broadcaster = new StreamController.broadcast();
-    // ReceivePort _receivePort;
+    ReceivePort _receivePort = new ReceivePort();
+
     Isolate.spawn(_receiverThread, {
-      'port': broadcaster,
+      'port': _receivePort.sendPort,
       'receiver': Receiver.address,
     });
     // Isolate.spawn(_receiverThread, {'port': broadcaster});
-    return broadcaster.stream;
+    return _receivePort;
   }
 
   // Isolate _videoFrameReceiver;
@@ -123,7 +123,7 @@ abstract class FlutterNdi {
 
   static void _receiverThread(Map map) {
     Pointer<Void> Receiver = Pointer<Void>.fromAddress(map['receiver']);
-    StreamController emitter = map['port'];
+    SendPort emitter = map['port'];
 
     var vFrame = malloc<NDIlib_video_frame_v2_t>();
     var aFrame = malloc<NDIlib_audio_frame_v2_t>();
@@ -137,9 +137,16 @@ abstract class FlutterNdi {
         case NDIlib_frame_type_e.NDIlib_frame_type_video:
           int yres = vFrame.ref.yres;
           int xres = vFrame.ref.xres;
-          int stride = 1920;
-
-          emit(vFrame.ref.p_data.asTypedList(xres * yres));
+          double dpi = 96.0 * vFrame.ref.picture_aspect_ratio / (xres / yres);
+          int stride =
+              vFrame.ref.data_size_if_fourcc_compressed_else_line_stride;
+          // Stride = bytes per line
+          // Should be 4 * width -- BGRA
+          emitter.send({
+            'width': xres,
+            'height': yres,
+            'data': vFrame.ref.p_data.asTypedList(yres * stride)
+          });
 
           ///
           break;
