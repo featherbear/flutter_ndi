@@ -239,6 +239,11 @@ typedef struct NDIlib_video_frame_v2_t
 	// The video data itself
 	uint8_t* p_data;
 
+
+	int data_size_if_fourcc_compressed_else_line_stride;
+	/*
+	// REMOVED FOR dart:ffigen COMPAT
+
 	union
 	{	// If the FourCC is not a compressed type, then this will be the inter-line stride of the video data
 		// in bytes.  If the stride is 0, then it will default to sizeof(one pixel)*xres.
@@ -247,6 +252,7 @@ typedef struct NDIlib_video_frame_v2_t
 		// If the FourCC is a compressed type, then this will be the size of the p_data buffer in bytes.
 		int data_size_in_bytes;
 	};
+	*/
 
 	// Per frame metadata for this frame. This is a NULL terminated UTF8 string that should be in XML format.
 	// If you do not want any metadata then you may specify NULL here.
