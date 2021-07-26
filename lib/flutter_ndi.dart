@@ -15,6 +15,14 @@ final DynamicLibrary libNDI_dynamicLib = Platform.isAndroid
     : DynamicLibrary.process();
 
 NativeLibrary libNDI = new NativeLibrary(libNDI_dynamicLib);
+
+class NDISource {
+  String name;
+  String address;
+
+  NDISource({required this.name, required this.address});
+}
+
 abstract class FlutterNdi {
   static bool isLoaded = false;
 
@@ -59,27 +67,31 @@ abstract class FlutterNdi {
     return libNDI.NDIlib_find_create_v2(finder_data);
   }
 
-  static List<String> findSources() =>
+  static List<NDISource> findSources() =>
       findSourcesExplicit(createSourceFinder());
-  static List<String> findSourcesExplicit(Pointer<Void> SourceFinder) {
-    List<String> result = [];
+  static List<NDISource> findSourcesExplicit(Pointer<Void> SourceFinder) {
+    List<NDISource> result = [];
     if (libNDI.NDIlib_find_wait_for_sources(SourceFinder, 5000)) {
       Pointer<Uint32> numSources = malloc<Uint32>();
       Pointer<NDIlib_source_t> sources =
           libNDI.NDIlib_find_get_current_sources(SourceFinder, numSources);
       for (var i = 0; i < numSources.value; i++) {
-        result.add(
-            sources.elementAt(i).ref.p_ndi_name.cast<Utf8>().toDartString());
+        NDIlib_source_t source_t = sources.elementAt(i).ref;
+        result.add(NDISource(
+            name: source_t.p_ndi_name.cast<Utf8>().toDartString(),
+            address: source_t.p_url_address.cast<Utf8>().toDartString()));
       }
     }
 
     return result;
   }
 
-  static Future<Stream> listenToFrameData(String sourceURI) async {
+  static Stream listenToFrameData(NDISource source) {
     // FlutterNdi.libNDI.NDIlib_recv_create_v3()
     var source_t = malloc<NDIlib_source_t>();
-    source_t.ref.p_ndi_name = sourceURI.toNativeUtf8().cast<Int8>();
+
+    source_t.ref.p_ndi_name = source.name.toNativeUtf8().cast<Int8>();
+    source_t.ref.p_url_address = source.address.toNativeUtf8().cast<Int8>();
 
     var recvDescription = malloc<NDIlib_recv_create_v3_t>();
     recvDescription.ref.source_to_connect_to = source_t.ref;
