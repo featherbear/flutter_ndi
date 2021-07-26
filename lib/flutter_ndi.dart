@@ -45,16 +45,33 @@ class FlutterNdi {
     }
   }
 
-  Pointer<Void> createSendHandle(String sourceName) {
+  static Pointer<Void> createSendHandle(String sourceName) {
     final source_data = calloc<NDIlib_send_create_t>();
     source_data.ref.p_ndi_name = sourceName.toNativeUtf8().cast<Int8>();
 
     return libNDI.NDIlib_send_create(source_data);
   }
 
-  Pointer<Void> findSources() {
+  static Pointer<Void> createSourceFinder() {
     final finder_data = calloc<NDIlib_find_create_t>();
     finder_data.ref.show_local_sources = true_1;
     return libNDI.NDIlib_find_create_v2(finder_data);
+  }
+
+  static List<String> findSources() =>
+      findSourcesExplicit(createSourceFinder());
+  static List<String> findSourcesExplicit(Pointer<Void> SourceFinder) {
+    List<String> result = [];
+    if (libNDI.NDIlib_find_wait_for_sources(SourceFinder, 5000)) {
+      Pointer<Uint32> numSources = malloc<Uint32>();
+      Pointer<NDIlib_source_t> sources =
+          libNDI.NDIlib_find_get_current_sources(SourceFinder, numSources);
+      for (var i = 0; i < numSources.value; i++) {
+        result.add(
+            sources.elementAt(i).ref.p_ndi_name.cast<Utf8>().toDartString());
+      }
+    }
+
+    return result;
   }
 }
