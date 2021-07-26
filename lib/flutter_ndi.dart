@@ -13,7 +13,7 @@ final DynamicLibrary libNDI_dynamicLib = Platform.isAndroid
     ? DynamicLibrary.open("libndi.so")
     : DynamicLibrary.process();
 
-class FlutterNdi {
+abstract class FlutterNdi {
   static bool isLoaded = false;
 
   static const MethodChannel _channel = const MethodChannel('flutter_ndi');
