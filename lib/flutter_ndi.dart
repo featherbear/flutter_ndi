@@ -106,9 +106,12 @@ abstract class FlutterNdi {
     Pointer<Void> Receiver = libNDI.NDIlib_recv_create_v3(recvDescription);
 
     StreamController broadcaster = new StreamController.broadcast();
-
-    await Isolate.spawn(
-        _receiverThread, {'port': broadcaster.add, 'receiver': Receiver});
+    // ReceivePort _receivePort;
+    Isolate.spawn(_receiverThread, {
+      'port': broadcaster,
+      'receiver': Receiver.address,
+    });
+    // Isolate.spawn(_receiverThread, {'port': broadcaster});
     return broadcaster.stream;
   }
 
@@ -119,8 +122,8 @@ abstract class FlutterNdi {
   // https://api.flutter.dev/flutter/dart-isolate/Isolate-class.html
 
   static void _receiverThread(Map map) {
-    Pointer<Void> Receiver = map['receiver'];
-    Function emit = map['port'];
+    Pointer<Void> Receiver = Pointer<Void>.fromAddress(map['receiver']);
+    StreamController emitter = map['port'];
 
     var vFrame = malloc<NDIlib_video_frame_v2_t>();
     var aFrame = malloc<NDIlib_audio_frame_v2_t>();
