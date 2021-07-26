@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import 'dart:ffi';
 import 'package:ffi/ffi.dart';
+import 'dart:isolate';
 
 import 'dart:io';
 
@@ -73,5 +74,69 @@ abstract class FlutterNdi {
     }
 
     return result;
+  }
+
+  static Future<Stream> listenToFrameData(String sourceURI) async {
+    // FlutterNdi.libNDI.NDIlib_recv_create_v3()
+    var source_t = malloc<NDIlib_source_t>();
+    source_t.ref.p_ndi_name = sourceURI.toNativeUtf8().cast<Int8>();
+
+    var recvDescription = malloc<NDIlib_recv_create_v3_t>();
+    recvDescription.ref.source_to_connect_to = source_t.ref;
+    recvDescription.ref.color_format =
+        NDIlib_recv_color_format_e.NDIlib_recv_color_format_BGRX_BGRA;
+    recvDescription.ref.bandwidth =
+        NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_highest;
+    recvDescription.ref.allow_video_fields = false_1;
+    recvDescription.ref.p_ndi_recv_name =
+        "Channel 1".toNativeUtf8().cast<Int8>();
+
+    Pointer<Void> Receiver = libNDI.NDIlib_recv_create_v3(recvDescription);
+
+    StreamController broadcaster = new StreamController.broadcast();
+
+    await Isolate.spawn(
+        _receiverThread, {'port': broadcaster.add, 'receiver': Receiver});
+    return broadcaster.stream;
+  }
+
+  // Isolate _videoFrameReceiver;
+  // final receivePort = ReceivePort();
+  //https://gist.github.com/jebright/a7086adc305615aa3a655c6d8bd90264
+  //http://a5.ua/blog/how-use-isolates-flutter
+  // https://api.flutter.dev/flutter/dart-isolate/Isolate-class.html
+
+  static void _receiverThread(Map map) {
+    Pointer<Void> Receiver = map['receiver'];
+    Function emit = map['port'];
+
+    var vFrame = malloc<NDIlib_video_frame_v2_t>();
+    var aFrame = malloc<NDIlib_audio_frame_v2_t>();
+    var mFrame = malloc<NDIlib_metadata_frame_t>();
+
+    while (true) {
+      switch (libNDI.NDIlib_recv_capture_v2(
+          Receiver, vFrame, aFrame, mFrame, 1000)) {
+        case NDIlib_frame_type_e.NDIlib_frame_type_none:
+          break;
+        case NDIlib_frame_type_e.NDIlib_frame_type_video:
+          int yres = vFrame.ref.yres;
+          int xres = vFrame.ref.xres;
+          int stride = 1920;
+
+          emit(vFrame.ref.p_data.asTypedList(xres * yres));
+
+          ///
+          break;
+        case NDIlib_frame_type_e.NDIlib_frame_type_audio:
+          break;
+        case NDIlib_frame_type_e.NDIlib_frame_type_metadata:
+          break;
+        case NDIlib_frame_type_e.NDIlib_frame_type_error:
+          break;
+        case NDIlib_frame_type_e.NDIlib_frame_type_status_change:
+          break;
+      }
+    }
   }
 }
