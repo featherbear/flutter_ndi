@@ -14,11 +14,11 @@ final DynamicLibrary libNDI_dynamicLib = Platform.isAndroid
     ? DynamicLibrary.open("libndi.so")
     : DynamicLibrary.process();
 
+NativeLibrary libNDI = new NativeLibrary(libNDI_dynamicLib);
 abstract class FlutterNdi {
   static bool isLoaded = false;
 
   static const MethodChannel _channel = const MethodChannel('flutter_ndi');
-  static NativeLibrary libNDI = null as NativeLibrary;
 
   // TODO: Remove
   static Future<String?> get platformVersion async {
@@ -37,7 +37,7 @@ abstract class FlutterNdi {
   static Future<bool> initPlugin() async {
     if (isLoaded) return isLoaded;
     await _channel.invokeMethod('init_os');
-    libNDI = new NativeLibrary(libNDI_dynamicLib);
+    // libNDI = new NativeLibrary(libNDI_dynamicLib);
     if (libNDI.NDIlib_initialize()) return true;
     if (!libNDI.NDIlib_is_supported_CPU()) {
       throw Exception("CPU incompatible with NDI");
