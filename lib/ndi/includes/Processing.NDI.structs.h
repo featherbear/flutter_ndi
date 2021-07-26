@@ -191,6 +191,11 @@ typedef struct NDIlib_source_t
 	// application readable and might well change in the future. This can be NULL if you do not know it and
 	// the API internally will instantiate a finder that is used to discover it even if it is not yet
 	// available on the network.
+
+	const char* p_url_address;
+
+	/*
+	// REMOVED FOR dart:ffigen COMPAT
 	union
 	{	// The current way of addressing the value
 		const char* p_url_address;
@@ -199,6 +204,7 @@ typedef struct NDIlib_source_t
 		// depreciated but maintained for compatibility.
 		PROCESSINGNDILIB_DEPRECATED const char* p_ip_address;
 	};
+	*/
 
 	// Default constructor in C++
 #if NDILIB_CPP_DEFAULT_CONSTRUCTORS
