@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 
 import 'dart:ffi';
+import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'dart:isolate';
 
@@ -21,6 +22,15 @@ class NDISource {
   String address;
 
   NDISource({required this.name, required this.address});
+}
+
+class VideoFrameData {
+  int width;
+  int height;
+  Uint8List data;
+
+  VideoFrameData(
+      {required this.width, required this.height, required this.data});
 }
 
 abstract class FlutterNdi {
@@ -142,14 +152,18 @@ abstract class FlutterNdi {
               vFrame.ref.data_size_if_fourcc_compressed_else_line_stride;
           // Stride = bytes per line
           // Should be 4 * width -- BGRA
-          emitter.send({
-            'width': xres,
-            'height': yres,
-            'data': vFrame.ref.p_data.asTypedList(yres * stride)
+
+          emitter.send((Future<void> Function(VideoFrameData) callback) async {
+            await callback(VideoFrameData(
+                width: xres,
+                height: yres,
+                data: vFrame.ref.p_data.asTypedList(yres * stride)));
+
+            libNDI.NDIlib_recv_free_video_v2(Receiver, vFrame);
           });
 
           ///
-          libNDI.NDIlib_recv_free_video_v2(Receiver, vFrame);
+
           break;
         case NDIlib_frame_type_e.NDIlib_frame_type_audio:
           libNDI.NDIlib_recv_free_audio_v2(Receiver, aFrame);
