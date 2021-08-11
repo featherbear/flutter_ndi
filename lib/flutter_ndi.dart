@@ -141,7 +141,9 @@ abstract class FlutterNdi {
 
     while (true) {
       switch (libNDI.NDIlib_recv_capture_v2(
-          Receiver, vFrame, aFrame, mFrame, 1000)) {
+          Receiver, vFrame, nullptr, mFrame, 1000)) {
+        // switch (libNDI.NDIlib_recv_capture_v2(
+        //     Receiver, vFrame, aFrame, mFrame, 1000)) {
         case NDIlib_frame_type_e.NDIlib_frame_type_none:
           break;
         case NDIlib_frame_type_e.NDIlib_frame_type_video:
