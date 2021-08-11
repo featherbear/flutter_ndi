@@ -42,9 +42,9 @@ public class FlutterNdiPlugin implements FlutterPlugin, MethodCallHandler {
   @Override
   public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
     switch (call.method) {
-    case "getPlatformVersion":
-      result.success("Android ${android.os.Build.VERSION.RELEASE}");
-      break;
+    // case "getPlatformVersion":
+    //   result.success("Android ${android.os.Build.VERSION.RELEASE}");
+    //   break;
     case "init_os":
       if (m_nsdManager == null) {
         m_nsdManager = (NsdManager) mContext.getSystemService(Context.NSD_SERVICE);

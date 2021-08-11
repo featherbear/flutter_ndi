@@ -28,19 +28,19 @@ abstract class FlutterNdi {
 
   static const MethodChannel _channel = const MethodChannel('flutter_ndi');
 
-  // TODO: Remove
-  static Future<String?> get platformVersion async {
-    // instance = libNDI.NDIlib_send_create();
-    // if (!instance) {
-    //   error
-    // }
+  // // TODO: Remove
+  // static Future<String?> get platformVersion async {
+  //   // instance = libNDI.NDIlib_send_create();
+  //   // if (!instance) {
+  //   //   error
+  //   // }
 
-    // onframe
-    // libNDI.NDIlib_send_send_video_v2(instance, p_video_data)
+  //   // onframe
+  //   // libNDI.NDIlib_send_send_video_v2(instance, p_video_data)
 
-    final String? version = await _channel.invokeMethod('getPlatformVersion');
-    return version;
-  }
+  //   final String? version = await _channel.invokeMethod('getPlatformVersion');
+  //   return version;
+  // }
 
   static Future<bool> initPlugin() async {
     if (isLoaded) return isLoaded;
