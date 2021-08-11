@@ -149,10 +149,13 @@ abstract class FlutterNdi {
           });
 
           ///
+          libNDI.NDIlib_recv_free_video_v2(Receiver, vFrame);
           break;
         case NDIlib_frame_type_e.NDIlib_frame_type_audio:
+          libNDI.NDIlib_recv_free_audio_v2(Receiver, aFrame);
           break;
         case NDIlib_frame_type_e.NDIlib_frame_type_metadata:
+          libNDI.NDIlib_recv_free_metadata(Receiver, mFrame);
           break;
         case NDIlib_frame_type_e.NDIlib_frame_type_error:
           break;
