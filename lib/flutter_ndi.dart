@@ -44,7 +44,7 @@ abstract class FlutterNdi {
 
   static Future<bool> initPlugin() async {
     if (isLoaded) return isLoaded;
-    await _channel.invokeMethod('init_os');
+    // await _channel.invokeMethod('init_os');
     // libNDI = new NativeLibrary(libNDI_dynamicLib);
     if (libNDI.NDIlib_initialize()) return true;
     if (!libNDI.NDIlib_is_supported_CPU()) {
