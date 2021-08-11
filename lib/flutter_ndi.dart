@@ -155,14 +155,13 @@ abstract class FlutterNdi {
           // Stride = bytes per line
           // Should be 4 * width -- BGRA
 
-          emitter.send((Future<void> Function(VideoFrameData) callback) async {
-            await callback(VideoFrameData(
-                width: xres,
-                height: yres,
-                data: vFrame.ref.p_data.asTypedList(yres * stride)));
+          emitter.send(VideoFrameData(
+              width: xres,
+              height: yres,
+              data: Uint8List.fromList(
+                  vFrame.ref.p_data.asTypedList(yres * stride))));
 
-            libNDI.NDIlib_recv_free_video_v2(Receiver, vFrame);
-          });
+          libNDI.NDIlib_recv_free_video_v2(Receiver, vFrame);
 
           ///
 
