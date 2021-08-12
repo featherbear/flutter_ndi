@@ -77,14 +77,15 @@ abstract class FlutterNdi {
     return libNDI.NDIlib_find_create_v2(finder_data);
   }
 
-  static List<NDISource> findSources() =>
-      findSourcesExplicit(createSourceFinder());
-  static List<NDISource> findSourcesExplicit(Pointer<Void> SourceFinder) {
+  static List<NDISource> findSources({Pointer<Void>? sourceFinder}) {
+    var __orig_sourceFinder = sourceFinder;
+    if (sourceFinder == null) sourceFinder = createSourceFinder();
+
     List<NDISource> result = [];
-    if (libNDI.NDIlib_find_wait_for_sources(SourceFinder, 5000)) {
+    if (libNDI.NDIlib_find_wait_for_sources(sourceFinder, 5000)) {
       Pointer<Uint32> numSources = malloc<Uint32>();
       Pointer<NDIlib_source_t> sources =
-          libNDI.NDIlib_find_get_current_sources(SourceFinder, numSources);
+          libNDI.NDIlib_find_get_current_sources(sourceFinder, numSources);
       for (var i = 0; i < numSources.value; i++) {
         NDIlib_source_t source_t = sources.elementAt(i).ref;
         result.add(NDISource(
@@ -93,6 +94,8 @@ abstract class FlutterNdi {
       }
     }
 
+    // Destroy the source finder if created from this function
+    if (__orig_sourceFinder == null) libNDI.NDIlib_find_destroy(sourceFinder);
     return result;
   }
 
