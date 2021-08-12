@@ -126,10 +126,29 @@ abstract class FlutterNdi {
     Isolate.spawn(_receiverThread, {
       'port': _receivePort.sendPort,
       'receiver': Receiver.address,
+    }).then((isolate) {
+      // TODO: Map to a cleanup function, so has access to the isolate, receiver, etc
+      activeThreads[_receivePort] = [isolate, Receiver.address];
     });
-    // Isolate.spawn(_receiverThread, {'port': broadcaster});
+
     return _receivePort;
   }
+
+  static void stopListen(ReceivePort port) {
+    if (!activeThreads.containsKey(port)) return;
+
+    activeThreads.remove(port);
+
+    // TODO: Garbage collection, free the frames
+
+    port.close();
+
+    var i, r = activeThreads[port];
+    (i as Isolate).kill();
+    libNDI.NDIlib_recv_destroy(Pointer.fromAddress(r as int));
+  }
+
+  static Map<ReceivePort, List> activeThreads = Map();
 
   // Isolate _videoFrameReceiver;
   // final receivePort = ReceivePort();
@@ -143,6 +162,7 @@ abstract class FlutterNdi {
 
     // NDIlib_send_is_keyframe_required
 
+    // TODO: Garbage collect
     var vFrame = malloc<NDIlib_video_frame_v2_t>();
     var aFrame = malloc<NDIlib_audio_frame_v2_t>();
     var mFrame = malloc<NDIlib_metadata_frame_t>();
