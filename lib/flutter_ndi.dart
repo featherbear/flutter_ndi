@@ -119,6 +119,8 @@ abstract class FlutterNdi {
     Pointer<Void> Receiver =
         libNDI.NDIlib_recv_create_v4(recvDescription, nullptr);
 
+    // malloc.free(source_t);
+
     ReceivePort _receivePort = new ReceivePort();
 
     Isolate.spawn(_receiverThread, {
