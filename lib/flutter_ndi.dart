@@ -113,7 +113,8 @@ abstract class FlutterNdi {
     recvDescription.ref.p_ndi_recv_name =
         "Channel 1".toNativeUtf8().cast<Int8>();
 
-    Pointer<Void> Receiver = libNDI.NDIlib_recv_create_v3(recvDescription);
+    Pointer<Void> Receiver =
+        libNDI.NDIlib_recv_create_v4(recvDescription, nullptr);
 
     ReceivePort _receivePort = new ReceivePort();
 
@@ -135,12 +136,15 @@ abstract class FlutterNdi {
     Pointer<Void> Receiver = Pointer<Void>.fromAddress(map['receiver']);
     SendPort emitter = map['port'];
 
+    // NDIlib_send_is_keyframe_required
+
     var vFrame = malloc<NDIlib_video_frame_v2_t>();
     var aFrame = malloc<NDIlib_audio_frame_v2_t>();
     var mFrame = malloc<NDIlib_metadata_frame_t>();
 
     while (true) {
-      switch (libNDI.NDIlib_recv_capture_v2(
+      // What if multiple types were received? memory leak?
+      switch (libNDI.NDIlib_recv_capture_v3(
           Receiver, vFrame, nullptr, mFrame, 1000)) {
         // switch (libNDI.NDIlib_recv_capture_v2(
         //     Receiver, vFrame, aFrame, mFrame, 1000)) {
