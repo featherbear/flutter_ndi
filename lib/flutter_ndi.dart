@@ -106,7 +106,7 @@ abstract class FlutterNdi {
     var recvDescription = malloc<NDIlib_recv_create_v3_t>();
     recvDescription.ref.source_to_connect_to = source_t.ref;
     recvDescription.ref.color_format =
-        NDIlib_recv_color_format_e.NDIlib_recv_color_format_BGRX_BGRA;
+        NDIlib_recv_color_format_e.NDIlib_recv_color_format_RGBX_RGBA;
     recvDescription.ref.bandwidth =
         NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_highest;
     recvDescription.ref.allow_video_fields = false_1;
