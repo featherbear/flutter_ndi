@@ -135,7 +135,8 @@ abstract class FlutterNdi {
     recvDescription.ref.color_format =
         NDIlib_recv_color_format_e.NDIlib_recv_color_format_RGBX_RGBA;
     recvDescription.ref.bandwidth =
-        NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_highest;
+        NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_lowest;
+    // NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_highest;
     recvDescription.ref.allow_video_fields = false_1;
     recvDescription.ref.p_ndi_recv_name =
         "Channel 1".toNativeUtf8().cast<Int8>();
