@@ -144,35 +144,30 @@ abstract class FlutterNdi {
         libNDI.NDIlib_recv_create_v4(recvDescription, nullptr);
 
     // malloc.free(source_t);
+    // malloc.free(recvDescription)
 
     ReceivePort _receivePort = new ReceivePort();
-
+    ReceivePort _controlPort = new ReceivePort();
     Isolate.spawn(_receiverThread, {
       'port': _receivePort.sendPort,
+      'controlPort': _controlPort.sendPort,
       'receiver': Receiver.address,
     }).then((isolate) {
-      // TODO: Map to a cleanup function, so has access to the isolate, receiver, etc
-      activeThreads[_receivePort] = [isolate, Receiver.address];
+      activeThreads[_receivePort] = () {
+        activeThreads.remove(_receivePort);
+        _receivePort.close();
+        _controlPort.first.then((value) => (value as SendPort).send(null));
+      };
     });
 
     return _receivePort;
   }
 
   static void stopListen(ReceivePort port) {
-    if (!activeThreads.containsKey(port)) return;
-
-    activeThreads.remove(port);
-
-    // TODO: Garbage collection, free the frames
-
-    port.close();
-
-    var i, r = activeThreads[port];
-    (i as Isolate).kill();
-    libNDI.NDIlib_recv_destroy(Pointer.fromAddress(r as int));
+    activeThreads[port]?.call();
   }
 
-  static Map<ReceivePort, List> activeThreads = Map();
+  static Map<ReceivePort, Function> activeThreads = Map();
 
   // Isolate _videoFrameReceiver;
   // final receivePort = ReceivePort();
@@ -184,19 +179,26 @@ abstract class FlutterNdi {
     Pointer<Void> Receiver = Pointer<Void>.fromAddress(map['receiver']);
     SendPort emitter = map['port'];
 
+    bool active = true;
+
+    // Can't send ReceivePorts over Isolate messages
+    // So instead we send a SendPort, which sends back a reply SendPort
+    // When the reply SendPort is called, then set active to false;
+    SendPort control = map['controlPort'];
+    ReceivePort stopSignal = new ReceivePort();
+    control.send(stopSignal.sendPort);
+    stopSignal.first.then((value) => (active = false));
+
     // NDIlib_send_is_keyframe_required
 
-    // TODO: Garbage collect
     var vFrame = malloc<NDIlib_video_frame_v2_t>();
     var aFrame = malloc<NDIlib_audio_frame_v2_t>();
     var mFrame = malloc<NDIlib_metadata_frame_t>();
 
-    while (true) {
+    while (active) {
       // What if multiple types were received? memory leak?
       switch (libNDI.NDIlib_recv_capture_v3(
           Receiver, vFrame, nullptr, mFrame, 1000)) {
-        // switch (libNDI.NDIlib_recv_capture_v2(
-        //     Receiver, vFrame, aFrame, mFrame, 1000)) {
         case NDIlib_frame_type_e.NDIlib_frame_type_none:
           break;
         case NDIlib_frame_type_e.NDIlib_frame_type_video:
@@ -231,5 +233,12 @@ abstract class FlutterNdi {
           break;
       }
     }
+
+    malloc.free(vFrame);
+    malloc.free(aFrame);
+    malloc.free(mFrame);
+
+    libNDI.NDIlib_recv_destroy(Receiver);
+    malloc.free(Receiver);
   }
 }
