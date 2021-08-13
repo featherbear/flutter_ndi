@@ -75,7 +75,9 @@ abstract class FlutterNdi {
   static Pointer<Void> createSourceFinder() {
     final finder_data = calloc<NDIlib_find_create_t>();
     finder_data.ref.show_local_sources = true_1;
-    return libNDI.NDIlib_find_create_v2(finder_data);
+    var result = libNDI.NDIlib_find_create_v2(finder_data);
+    return result;
+    // calloc.free(finder_data);
   }
 
   static Map<String, Tuple2<NDISource, DateTime>> historicalSources = new Map();
@@ -93,9 +95,7 @@ abstract class FlutterNdi {
     var __orig_sourceFinder = sourceFinder;
     if (sourceFinder == null) sourceFinder = createSourceFinder();
 
-    List<NDISource> result = [];
-
-    libNDI.NDIlib_find_wait_for_sources(sourceFinder, 10000);
+    libNDI.NDIlib_find_wait_for_sources(sourceFinder, 2000);
     List<NDISource> discoveredSources = [];
     Pointer<Uint32> numSources = malloc<Uint32>();
     Pointer<NDIlib_source_t> sources =
@@ -125,7 +125,6 @@ abstract class FlutterNdi {
   }
 
   static ReceivePort listenToFrameData(NDISource source) {
-    // FlutterNdi.libNDI.NDIlib_recv_create_v3()
     var source_t = malloc<NDIlib_source_t>();
 
     source_t.ref.p_ndi_name = source.name.toNativeUtf8().cast<Int8>();
