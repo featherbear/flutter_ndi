@@ -6,6 +6,7 @@ import 'dart:ffi';
 import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'dart:isolate';
+import 'package:tuple/tuple.dart';
 
 import 'dart:io';
 
@@ -77,26 +78,50 @@ abstract class FlutterNdi {
     return libNDI.NDIlib_find_create_v2(finder_data);
   }
 
-  static List<NDISource> findSources({Pointer<Void>? sourceFinder}) {
+  static Map<String, Tuple2<NDISource, DateTime>> historicalSources = new Map();
+
+  static List<NDISource> getDiscoveredSources() {
+    var minDiscoveryTime = DateTime.now().subtract(Duration(minutes: 1));
+    return historicalSources.values
+        .where((tup) => tup.item2.isAfter(minDiscoveryTime))
+        .map((e) => e.item1)
+        .toList();
+  }
+
+  static List<NDISource> findSources(
+      {Pointer<Void>? sourceFinder, bool onlyImmediate = false}) {
     var __orig_sourceFinder = sourceFinder;
     if (sourceFinder == null) sourceFinder = createSourceFinder();
 
     List<NDISource> result = [];
-    if (libNDI.NDIlib_find_wait_for_sources(sourceFinder, 5000)) {
-      Pointer<Uint32> numSources = malloc<Uint32>();
-      Pointer<NDIlib_source_t> sources =
-          libNDI.NDIlib_find_get_current_sources(sourceFinder, numSources);
-      for (var i = 0; i < numSources.value; i++) {
-        NDIlib_source_t source_t = sources.elementAt(i).ref;
-        result.add(NDISource(
-            name: source_t.p_ndi_name.cast<Utf8>().toDartString(),
-            address: source_t.p_url_address.cast<Utf8>().toDartString()));
-      }
+
+    libNDI.NDIlib_find_wait_for_sources(sourceFinder, 10000);
+    List<NDISource> discoveredSources = [];
+    Pointer<Uint32> numSources = malloc<Uint32>();
+    Pointer<NDIlib_source_t> sources =
+        libNDI.NDIlib_find_get_current_sources(sourceFinder, numSources);
+    for (var i = 0; i < numSources.value; i++) {
+      NDIlib_source_t source_t = sources.elementAt(i).ref;
+      var sourceAddress = source_t.p_url_address.cast<Utf8>().toDartString();
+      NDISource source = new NDISource(
+          name: source_t.p_ndi_name.cast<Utf8>().toDartString(),
+          address: sourceAddress);
+
+      historicalSources[sourceAddress] = new Tuple2(source, DateTime.now());
+
+      if (onlyImmediate) discoveredSources.add(source);
     }
 
+    malloc.free(numSources);
+    // malloc.free(sources); // TODO: Free a few more than that...
+
     // Destroy the source finder if created from this function
-    if (__orig_sourceFinder == null) libNDI.NDIlib_find_destroy(sourceFinder);
-    return result;
+    if (__orig_sourceFinder == null) {
+      libNDI.NDIlib_find_destroy(sourceFinder);
+      // calloc.free(sourceFinder);
+    }
+
+    return onlyImmediate ? discoveredSources : getDiscoveredSources();
   }
 
   static ReceivePort listenToFrameData(NDISource source) {

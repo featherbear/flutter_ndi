@@ -11,6 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   ffi: ^1.1.2
+  tuple: ^2.0.0
 
 dev_dependencies:
   flutter_test:
@@ -22,7 +23,8 @@ ffigen:
   output: 'lib/libndi_bindings.dart'
   headers:
     entry-points:
-      - 'lib/ndi/includes/Processing.NDI.Lib.h'
+      # - 'lib/ndi/includes/Processing.NDI.Lib.h'
+      - 'lib/ndi/includes/Processing.NDI.Advanced.h'
   comments:
     style: any
     length: full
