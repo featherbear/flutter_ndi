@@ -9,7 +9,8 @@ Foreign Function Interface bindings for NewTek NDI.
 Because of licensing, I'm not allowed to include some of the NDI SDK components inside this repository, so you'll have to source it yourself!
 
 1) Download the [NDI 5 Advanced SDK](https://www.ndi.tv/sdk/) (for Android)  
-2) Add the library files into their respective `android/src/main/jniLibs/<architecture>` directory (see _Expected Structure_)  
+2) Add the library files into their respective `android/src/main/jniLibs/<architecture>` directory  
+   * See _Expected Structure_ below
 3) `dart run ffigen`  
 
 
