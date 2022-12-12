@@ -12,7 +12,8 @@ Because of licensing, I'm not allowed to include some of the NDI SDK components 
 1) Download the [NDI SDK](https://www.ndi.tv/sdk/) (for Android)  
 2) Add the library files into their respective `android/src/main/jniLibs/<architecture>` directory  
    * See _Expected Structure_ below
-3) `dart run ffigen`  
+3) Remove `union` references in `lib/ndi/includes/Processing.NDI.structs.h`  
+4) `dart run ffigen`  
 
 
 <details><summary>Expected Structure</summary>
