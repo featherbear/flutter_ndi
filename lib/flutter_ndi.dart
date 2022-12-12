@@ -65,16 +65,17 @@ abstract class FlutterNdi {
     }
   }
 
-  static Pointer<Void> createSendHandle(String sourceName) {
+  static Pointer<NDIlib_send_instance_type> createSendHandle(
+      String sourceName) {
     final source_data = calloc<NDIlib_send_create_t>();
-    source_data.ref.p_ndi_name = sourceName.toNativeUtf8().cast<Int8>();
+    source_data.ref.p_ndi_name = sourceName.toNativeUtf8().cast<Char>();
 
     return libNDI.NDIlib_send_create(source_data);
   }
 
-  static Pointer<Void> createSourceFinder() {
+  static Pointer<NDIlib_find_instance_type> createSourceFinder() {
     final finder_data = calloc<NDIlib_find_create_t>();
-    finder_data.ref.show_local_sources = true_1;
+    finder_data.ref.show_local_sources = true;
     var result = libNDI.NDIlib_find_create_v2(finder_data);
     return result;
     // calloc.free(finder_data);
@@ -91,7 +92,8 @@ abstract class FlutterNdi {
   }
 
   static List<NDISource> findSources(
-      {Pointer<Void>? sourceFinder, bool onlyImmediate = false}) {
+      {Pointer<NDIlib_find_instance_type>? sourceFinder,
+      bool onlyImmediate = false}) {
     var __orig_sourceFinder = sourceFinder;
     if (sourceFinder == null) sourceFinder = createSourceFinder();
 
@@ -100,6 +102,7 @@ abstract class FlutterNdi {
     Pointer<Uint32> numSources = malloc<Uint32>();
     Pointer<NDIlib_source_t> sources =
         libNDI.NDIlib_find_get_current_sources(sourceFinder, numSources);
+
     for (var i = 0; i < numSources.value; i++) {
       NDIlib_source_t source_t = sources.elementAt(i).ref;
       var sourceAddress = source_t.p_url_address.cast<Utf8>().toDartString();
@@ -127,8 +130,8 @@ abstract class FlutterNdi {
   static ReceivePort listenToFrameData(NDISource source) {
     var source_t = malloc<NDIlib_source_t>();
 
-    source_t.ref.p_ndi_name = source.name.toNativeUtf8().cast<Int8>();
-    source_t.ref.p_url_address = source.address.toNativeUtf8().cast<Int8>();
+    source_t.ref.p_ndi_name = source.name.toNativeUtf8().cast<Char>();
+    source_t.ref.p_url_address = source.address.toNativeUtf8().cast<Char>();
 
     var recvDescription = malloc<NDIlib_recv_create_v3_t>();
     recvDescription.ref.source_to_connect_to = source_t.ref;
@@ -137,12 +140,12 @@ abstract class FlutterNdi {
     recvDescription.ref.bandwidth =
         NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_lowest;
     // NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_highest;
-    recvDescription.ref.allow_video_fields = false_1;
+    recvDescription.ref.allow_video_fields = false;
     recvDescription.ref.p_ndi_recv_name =
-        "Channel 1".toNativeUtf8().cast<Int8>();
+        "Channel 1".toNativeUtf8().cast<Char>();
 
-    Pointer<Void> Receiver =
-        libNDI.NDIlib_recv_create_v4(recvDescription, nullptr);
+    Pointer<NDIlib_recv_instance_type> Receiver =
+        libNDI.NDIlib_recv_create_v3(recvDescription);
 
     // malloc.free(source_t);
     // malloc.free(recvDescription)
@@ -177,7 +180,8 @@ abstract class FlutterNdi {
   // https://api.flutter.dev/flutter/dart-isolate/Isolate-class.html
 
   static void _receiverThread(Map map) {
-    Pointer<Void> Receiver = Pointer<Void>.fromAddress(map['receiver']);
+    NDIlib_recv_instance_t Receiver =
+        NDIlib_recv_instance_t.fromAddress(map['receiver']);
     SendPort emitter = map['port'];
 
     bool active = true;
@@ -206,16 +210,16 @@ abstract class FlutterNdi {
           int yres = vFrame.ref.yres;
           int xres = vFrame.ref.xres;
           double dpi = 96.0 * vFrame.ref.picture_aspect_ratio / (xres / yres);
-          int stride =
-              vFrame.ref.data_size_if_fourcc_compressed_else_line_stride;
+          int data_size__if_fourcc_compressed__else_line_stride =
+              vFrame.ref.data_size_in_bytes;
           // Stride = bytes per line
           // Should be 4 * width -- BGRA
 
           emitter.send(VideoFrameData(
               width: xres,
               height: yres,
-              data: Uint8List.fromList(
-                  vFrame.ref.p_data.asTypedList(yres * stride))));
+              data: Uint8List.fromList(vFrame.ref.p_data.asTypedList(
+                  yres * data_size__if_fourcc_compressed__else_line_stride))));
 
           libNDI.NDIlib_recv_free_video_v2(Receiver, vFrame);
 

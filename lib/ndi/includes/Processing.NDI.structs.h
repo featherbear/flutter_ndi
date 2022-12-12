@@ -191,13 +191,12 @@ typedef struct NDIlib_source_t {
 	// application readable and might well change in the future. This can be NULL if you do not know it and
 	// the API internally will instantiate a finder that is used to discover it even if it is not yet
 	// available on the network.
-	union {	// The current way of addressing the value.
+	// The current way of addressing the value.
 		const char* p_url_address;
 
 		// We used to use an IP address before we used the more general URL notification this is now
 		// depreciated but maintained for compatibility.
 		PROCESSINGNDILIB_DEPRECATED const char* p_ip_address;
-	};
 
 #if NDILIB_CPP_DEFAULT_CONSTRUCTORS
 	NDIlib_source_t(const char* p_ndi_name_ = NULL, const char* p_url_address_ = NULL);
@@ -230,13 +229,12 @@ typedef struct NDIlib_video_frame_v2_t {
 	// The video data itself.
 	uint8_t* p_data;
 
-	union {	// If the FourCC is not a compressed type, then this will be the inter-line stride of the video data
+		// If the FourCC is not a compressed type, then this will be the inter-line stride of the video data
 		// in bytes.  If the stride is 0, then it will default to sizeof(one pixel)*xres.
 		int line_stride_in_bytes;
 
 		// If the FourCC is a compressed type, then this will be the size of the p_data buffer in bytes.
 		int data_size_in_bytes;
-	};
 
 	// Per frame metadata for this frame. This is a NULL terminated UTF8 string that should be in XML format.
 	// If you do not want any metadata then you may specify NULL here.
@@ -322,14 +320,12 @@ typedef struct NDIlib_audio_frame_v3_t {
 	// The audio data.
 	uint8_t* p_data;
 
-	union {
 		// If the FourCC is not a compressed type and the audio format is planar, then this will be the
 		// stride in bytes for a single channel.
 		int channel_stride_in_bytes;
 
 		// If the FourCC is a compressed type, then this will be the size of the p_data buffer in bytes.
 		int data_size_in_bytes;
-	};
 
 	// Per frame metadata for this frame. This is a NULL terminated UTF8 string that should be in XML format.
 	// If you do not want any metadata then you may specify NULL here.
