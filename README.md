@@ -9,7 +9,7 @@ Foreign Function Interface bindings for NewTek NDI.
 Because of licensing, I'm not allowed to include some of the NDI SDK components inside this repository, so you'll have to source it yourself!
 
 0) Install Dart/Flutter and [LLVM](https://pub.dev/packages/ffigen#installing-llvm)  
-1) Download the [NDI 5 Advanced SDK](https://www.ndi.tv/sdk/) (for Android)  
+1) Download the [NDI SDK](https://www.ndi.tv/sdk/) (for Android)  
 2) Add the library files into their respective `android/src/main/jniLibs/<architecture>` directory  
    * See _Expected Structure_ below
 3) `dart run ffigen`  
