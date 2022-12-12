@@ -10,13 +10,13 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  ffi: ^1.1.2
+  ffi: ^2.0.1
   tuple: ^2.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  ffigen: ^3.0.0
+  ffigen: ^7.2.2
 
 
 ffigen:
