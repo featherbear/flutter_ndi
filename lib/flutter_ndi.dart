@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
 import 'dart:ffi';
@@ -7,6 +8,7 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'dart:isolate';
 import 'package:tuple/tuple.dart';
+import 'dart:core';
 
 import 'dart:io';
 
@@ -93,26 +95,69 @@ abstract class FlutterNdi {
 
   static List<NDISource> findSources(
       {Pointer<NDIlib_find_instance_type>? sourceFinder,
-      bool onlyImmediate = false}) {
+      bool ignorePrevious = false}) {
     var __orig_sourceFinder = sourceFinder;
     if (sourceFinder == null) sourceFinder = createSourceFinder();
 
+    debugPrint("Searching for NDI sources");
     libNDI.NDIlib_find_wait_for_sources(sourceFinder, 2000);
+
     List<NDISource> discoveredSources = [];
     Pointer<Uint32> numSources = malloc<Uint32>();
     Pointer<NDIlib_source_t> sources =
         libNDI.NDIlib_find_get_current_sources(sourceFinder, numSources);
 
+    debugPrint("Found ${numSources.value} sources");
+
+    bool isValidAddress(String str) {
+      final splitIdx = str.lastIndexOf(":");
+      if (splitIdx == -1) return false;
+
+      // ipv4 rn
+      try {
+        Uri.parseIPv4Address(str.substring(0, splitIdx));
+      } catch (ex) {
+        debugPrint("Failed to parse ${ex.toString()}");
+        return false;
+      }
+
+      final port = int.tryParse(str.substring(splitIdx + 1));
+      if (port == null || port < 1 || port > 65535) return false;
+
+      return true;
+    }
+
     for (var i = 0; i < numSources.value; i++) {
-      NDIlib_source_t source_t = sources.elementAt(i).ref;
-      var sourceAddress = source_t.p_url_address.cast<Utf8>().toDartString();
-      NDISource source = new NDISource(
-          name: source_t.p_ndi_name.cast<Utf8>().toDartString(),
-          address: sourceAddress);
+      try {
+        NDIlib_source_t source_t = sources.elementAt(i).ref;
+        var sourceName = source_t.p_ndi_name.cast<Utf8>().toDartString();
+        var sourceAddress = source_t.p_url_address.cast<Utf8>().toDartString();
 
-      historicalSources[sourceAddress] = new Tuple2(source, DateTime.now());
+        // debugPrint("Original source address :: ${sourceAddress}");
+        if (!isValidAddress(sourceAddress)) {
+          // debugPrint("Fixing bad source resolution");
+          final _sourceName = sourceName;
+          sourceName = sourceAddress;
+          sourceAddress = _sourceName;
+        }
 
-      if (onlyImmediate) discoveredSources.add(source);
+        final source = NDISource(name: sourceName, address: sourceAddress);
+
+/**
+  I/flutter ( 6731): Searching for NDI sources
+  I/flutter ( 6731): Found 4 sources
+  I/flutter ( 6731): Discovered: RND-ANDREW (Intel UHD Graphics 620 1) @ 10.13.11.38:5962
+  I/flutter ( 6731): Discovered: 10.13.11.38:5963 @ RND-ANDREW (Intel UHD Graphics 620 3)
+  I/flutter ( 6731): Discovered: RND-ANDREW (Webcam NDI) @ 10.13.11.38:5961
+  I/flutter ( 6731): Couldn't unpack source 
+ */
+        debugPrint("Discovered: ${source.name} @ ${source.address}");
+
+        historicalSources[sourceAddress] = new Tuple2(source, DateTime.now());
+        if (ignorePrevious) discoveredSources.add(source);
+      } catch (ex) {
+        debugPrint("Couldn't unpack source");
+      }
     }
 
     malloc.free(numSources);
@@ -124,34 +169,46 @@ abstract class FlutterNdi {
       // calloc.free(sourceFinder);
     }
 
-    return onlyImmediate ? discoveredSources : getDiscoveredSources();
+    return ignorePrevious ? discoveredSources : getDiscoveredSources();
   }
 
   static ReceivePort listenToFrameData(NDISource source) {
-    var source_t = malloc<NDIlib_source_t>();
+    debugPrint("listenToFrameData :: ${source.name}");
 
+    final source_t = calloc<NDIlib_source_t>();
     source_t.ref.p_ndi_name = source.name.toNativeUtf8().cast<Char>();
-    source_t.ref.p_url_address = source.address.toNativeUtf8().cast<Char>();
+    // source_t.ref.p_url_address = source.address.toNativeUtf8().cast<Char>();
 
-    var recvDescription = malloc<NDIlib_recv_create_v3_t>();
+    var recvDescription = calloc<NDIlib_recv_create_v3_t>();
     recvDescription.ref.source_to_connect_to = source_t.ref;
     recvDescription.ref.color_format =
-        NDIlib_recv_color_format_e.NDIlib_recv_color_format_RGBX_RGBA;
+        // NDIlib_recv_color_format_e.NDIlib_recv_color_format_RGBX_RGBA;
+        (NDIlib_recv_color_format_e.NDIlib_recv_color_format_UYVY_RGBA << 32) |
+            NDIlib_recv_color_format_e.NDIlib_recv_color_format_UYVY_RGBA;
     recvDescription.ref.bandwidth =
         NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_lowest;
     // NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_highest;
+
     recvDescription.ref.allow_video_fields = false;
+
     recvDescription.ref.p_ndi_recv_name =
         "Channel 1".toNativeUtf8().cast<Char>();
 
-    Pointer<NDIlib_recv_instance_type> Receiver =
-        libNDI.NDIlib_recv_create_v3(recvDescription);
+    debugPrint("Creating receiver instance");
 
-    // malloc.free(source_t);
-    // malloc.free(recvDescription)
+    NDIlib_recv_instance_t Receiver =
+        libNDI.NDIlib_recv_create_v4(recvDescription, nullptr);
+
+    debugPrint("Created instance");
+
+    if (Receiver.address == 0) {
+      throw Exception("Could not create NDI receiver instance");
+    }
 
     ReceivePort _receivePort = new ReceivePort();
     ReceivePort _controlPort = new ReceivePort();
+
+    // eye-so-let
     Isolate.spawn(_receiverThread, {
       'port': _receivePort.sendPort,
       'controlPort': _controlPort.sendPort,
@@ -192,12 +249,15 @@ abstract class FlutterNdi {
     SendPort control = map['controlPort'];
     ReceivePort stopSignal = new ReceivePort();
     control.send(stopSignal.sendPort);
-    stopSignal.first.then((value) => (active = false));
+    stopSignal.first.then((value) => () {
+          debugPrint("Stop signal received");
+          active = false;
+        });
 
     // NDIlib_send_is_keyframe_required
 
     var vFrame = malloc<NDIlib_video_frame_v2_t>();
-    var aFrame = malloc<NDIlib_audio_frame_v2_t>();
+    // var aFrame = malloc<NDIlib_audio_frame_v2_t>();
     var mFrame = malloc<NDIlib_metadata_frame_t>();
 
     while (active) {
@@ -205,42 +265,56 @@ abstract class FlutterNdi {
       switch (libNDI.NDIlib_recv_capture_v3(
           Receiver, vFrame, nullptr, mFrame, 1000)) {
         case NDIlib_frame_type_e.NDIlib_frame_type_none:
+          debugPrint("Got empty frame");
           break;
+
         case NDIlib_frame_type_e.NDIlib_frame_type_video:
+          debugPrint("Got video frame");
+
+          switch (vFrame.ref.FourCC) {
+            case NDIlib_FourCC_video_type_e.NDIlib_FourCC_type_BGRX:
+              debugPrint("FourCC :: BGRX");
+              break;
+            default:
+              debugPrint("FourCC :: ${vFrame.ref.FourCC} (unresolved)");
+          }
+
           int yres = vFrame.ref.yres;
           int xres = vFrame.ref.xres;
-          double dpi = 96.0 * vFrame.ref.picture_aspect_ratio / (xres / yres);
-          int data_size__if_fourcc_compressed__else_line_stride =
-              vFrame.ref.data_size_in_bytes;
-          // Stride = bytes per line
-          // Should be 4 * width -- BGRA
+
+// TODO: Only emit if ready
 
           emitter.send(VideoFrameData(
               width: xres,
               height: yres,
-              data: Uint8List.fromList(vFrame.ref.p_data.asTypedList(
-                  yres * data_size__if_fourcc_compressed__else_line_stride))));
+              data: Uint8List.fromList(vFrame.ref.p_data
+                  .asTypedList(yres * vFrame.ref.line_stride_in_bytes))));
 
           libNDI.NDIlib_recv_free_video_v2(Receiver, vFrame);
-
-          ///
-
           break;
-        case NDIlib_frame_type_e.NDIlib_frame_type_audio:
-          libNDI.NDIlib_recv_free_audio_v2(Receiver, aFrame);
-          break;
+
+        // case NDIlib_frame_type_e.NDIlib_frame_type_audio:
+        //   debugPrint("Got audio frame");
+        //   libNDI.NDIlib_recv_free_audio_v2(Receiver, aFrame);
+        //   break;
+
         case NDIlib_frame_type_e.NDIlib_frame_type_metadata:
+          debugPrint("Got metadata frame");
           libNDI.NDIlib_recv_free_metadata(Receiver, mFrame);
           break;
+
         case NDIlib_frame_type_e.NDIlib_frame_type_error:
+          debugPrint("Got error frame");
           break;
+
         case NDIlib_frame_type_e.NDIlib_frame_type_status_change:
+          debugPrint("Got status change frame");
           break;
       }
     }
 
     malloc.free(vFrame);
-    malloc.free(aFrame);
+    // malloc.free(aFrame);
     malloc.free(mFrame);
 
     libNDI.NDIlib_recv_destroy(Receiver);
