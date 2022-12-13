@@ -9,7 +9,8 @@ Foreign Function Interface bindings for NewTek NDI.
 Because of licensing, I'm not allowed to include some of the NDI SDK components inside this repository, so you'll have to source it yourself!
 
 0) Install Dart/Flutter and [LLVM](https://pub.dev/packages/ffigen#installing-llvm)  
-1) Download the [NDI SDK](https://www.ndi.tv/sdk/) (for Android)  
+1) Download the [NDI Advanced SDK](https://www.ndi.tv/sdk/) (for Android)  
+  * Note: Only the NDI Advanced SDK is available for Android  
 2) Add the library files into their respective `android/src/main/jniLibs/<architecture>` directory  
    * See _Expected Structure_ below
 3) Remove `union` references in `lib/ndi/includes/Processing.NDI.structs.h`  
@@ -43,13 +44,12 @@ Because of licensing, I'm not allowed to include some of the NDI SDK components 
 
 </details>
 
-
-
+<!-- 
 ### Advanced SDK Functionality
 
 To use the advanced functionality of the NDI Advanced SDK, you will need to copy some header files into the `lib/ndi/includes` directory.  
 Also modify the `pubspec.yaml` file `ffigen.headers.entry-points` entry to point to `lib/ndi/includes/Processing.NDI.Advanced.h`.  
-Then run `dart run ffigen` and you should be set up
+Then run `dart run ffigen` and you should be set up -->
 
 ---
 

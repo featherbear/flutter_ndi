@@ -23,9 +23,9 @@ ffigen:
   output: 'lib/libndi_bindings.dart'
   headers:
     entry-points:
-      - 'lib/ndi/includes/Processing.NDI.Lib.h'
+      # - 'lib/ndi/includes/Processing.NDI.Lib.h'
       # To use the Advanced SDK bindings - comment the above, and uncomment the below
-      # - 'lib/ndi/includes/Processing.NDI.Advanced.h'
+      - 'lib/ndi/includes/Processing.NDI.Advanced.h'
       
   comments:
     style: any
