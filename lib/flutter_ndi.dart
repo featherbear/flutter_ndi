@@ -172,7 +172,8 @@ abstract class FlutterNdi {
     return ignorePrevious ? discoveredSources : getDiscoveredSources();
   }
 
-  static ReceivePort listenToFrameData(NDISource source) {
+  static Future<Tuple2<ReceivePort, SendPort>> subscribe(
+      NDISource source) async {
     debugPrint("listenToFrameData :: ${source.name}");
 
     final source_t = calloc<NDIlib_source_t>();
@@ -205,23 +206,33 @@ abstract class FlutterNdi {
       throw Exception("Could not create NDI receiver instance");
     }
 
-    ReceivePort _receivePort = new ReceivePort();
-    ReceivePort _controlPort = new ReceivePort();
+    ReceivePort dataSource = new ReceivePort();
+    ReceivePort _controlRecv = new ReceivePort();
+
+    late SendPort controlSend;
 
     // eye-so-let
-    Isolate.spawn(_receiverThread, {
-      'port': _receivePort.sendPort,
-      'controlPort': _controlPort.sendPort,
+    await Isolate.spawn(_receiverThread, {
+      'port': dataSource.sendPort,
+      'controlPort': _controlRecv.sendPort,
       'receiver': Receiver.address,
-    }).then((isolate) {
-      activeThreads[_receivePort] = () {
-        activeThreads.remove(_receivePort);
-        _receivePort.close();
-        _controlPort.first.then((value) => (value as SendPort).send(null));
+    }).then((isolate) async {
+      Completer controlSend__future = new Completer();
+      _controlRecv.first.then((value) => controlSend__future.complete(value));
+      controlSend = await controlSend__future.future;
+      debugPrint("Got controlSend at ${controlSend.hashCode}");
+
+      // controlSend = value
+      // Set tear-down function
+      activeThreads[dataSource] = () {
+        activeThreads.remove(dataSource);
+        dataSource.close();
+        controlSend.send(false);
       };
     });
 
-    return _receivePort;
+    debugPrint("RET");
+    return new Tuple2(dataSource, controlSend);
   }
 
   static void stopListen(ReceivePort port) {
@@ -236,40 +247,56 @@ abstract class FlutterNdi {
   //http://a5.ua/blog/how-use-isolates-flutter
   // https://api.flutter.dev/flutter/dart-isolate/Isolate-class.html
 
-  static void _receiverThread(Map map) {
+  static void _receiverThread(Map map) async {
+    // A ReceivePort can't be sent over Isolate messages
+    // So instead we send a SendPort `controlPort`
+    ReceivePort _controlPort = new ReceivePort();
+    debugPrint(
+        "Notifying control port of receive port (${_controlPort.hashCode}) send at (${_controlPort.sendPort.hashCode})");
+    (map['controlPort'] as SendPort).send(_controlPort.sendPort);
+
     NDIlib_recv_instance_t Receiver =
         NDIlib_recv_instance_t.fromAddress(map['receiver']);
     SendPort emitter = map['port'];
 
     bool active = true;
+    bool decoderReady = true;
 
-    // Can't send ReceivePorts over Isolate messages
-    // So instead we send a SendPort, which sends back a reply SendPort
-    // When the reply SendPort is called, then set active to false;
-    SendPort control = map['controlPort'];
-    ReceivePort stopSignal = new ReceivePort();
-    control.send(stopSignal.sendPort);
-    stopSignal.first.then((value) => () {
-          debugPrint("Stop signal received");
-          active = false;
-        });
-
+    int receivedVFrames = 0;
     // NDIlib_send_is_keyframe_required
 
     var vFrame = malloc<NDIlib_video_frame_v2_t>();
-    // var aFrame = malloc<NDIlib_audio_frame_v2_t>();
+    var aFrame = malloc<NDIlib_audio_frame_v3_t>();
     var mFrame = malloc<NDIlib_metadata_frame_t>();
 
+    _controlPort.listen((msg) {
+      switch (msg) {
+        case false:
+          // msg == false --> Stop
+          {
+            debugPrint("Stop signal received");
+            active = false;
+            break;
+          }
+        case true:
+          // msg == true --> decode ready
+          {
+            decoderReady = true;
+            break;
+          }
+      }
+    });
+
     while (active) {
-      // What if multiple types were received? memory leak?
       switch (libNDI.NDIlib_recv_capture_v3(
-          Receiver, vFrame, nullptr, mFrame, 1000)) {
+          Receiver, vFrame, aFrame, mFrame, 1000)) {
         case NDIlib_frame_type_e.NDIlib_frame_type_none:
           // debugPrint("Got empty frame");
           break;
 
         case NDIlib_frame_type_e.NDIlib_frame_type_video:
-          // debugPrint("Got video frame");
+          receivedVFrames++;
+          // debugPrint("Got video frame $receivedVFrames");
 
           switch (vFrame.ref.FourCC) {
             case NDIlib_FourCC_video_type_e.NDIlib_FourCC_type_BGRX:
@@ -282,21 +309,22 @@ abstract class FlutterNdi {
           int yres = vFrame.ref.yres;
           int xres = vFrame.ref.xres;
 
-// TODO: Only emit if ready
-
-          emitter.send(VideoFrameData(
-              width: xres,
-              height: yres,
-              data: Uint8List.fromList(vFrame.ref.p_data
-                  .asTypedList(yres * vFrame.ref.line_stride_in_bytes))));
+          if (decoderReady) {
+            decoderReady = false;
+            emitter.send(VideoFrameData(
+                width: xres,
+                height: yres,
+                data: Uint8List.fromList(vFrame.ref.p_data
+                    .asTypedList(yres * vFrame.ref.line_stride_in_bytes))));
+          }
 
           libNDI.NDIlib_recv_free_video_v2(Receiver, vFrame);
           break;
 
-        // case NDIlib_frame_type_e.NDIlib_frame_type_audio:
-        //   debugPrint("Got audio frame");
-        //   libNDI.NDIlib_recv_free_audio_v2(Receiver, aFrame);
-        //   break;
+        case NDIlib_frame_type_e.NDIlib_frame_type_audio:
+          // debugPrint("Got audio frame");
+          libNDI.NDIlib_recv_free_audio_v3(Receiver, aFrame);
+          break;
 
         case NDIlib_frame_type_e.NDIlib_frame_type_metadata:
           debugPrint("Got metadata frame");
@@ -311,10 +339,13 @@ abstract class FlutterNdi {
           debugPrint("Got status change frame");
           break;
       }
+
+// Pass control to the event queue to allocate the controlPort some time to receive
+      await Future(() {});
     }
 
     malloc.free(vFrame);
-    // malloc.free(aFrame);
+    malloc.free(aFrame);
     malloc.free(mFrame);
 
     libNDI.NDIlib_recv_destroy(Receiver);
