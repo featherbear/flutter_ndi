@@ -181,10 +181,10 @@ abstract class FlutterNdi {
 
     var recvDescription = calloc<NDIlib_recv_create_v3_t>();
     recvDescription.ref.source_to_connect_to = source_t.ref;
+
+    // FIXME: Changing this value doesn't seem to change the received FourCC
     recvDescription.ref.color_format =
-        // NDIlib_recv_color_format_e.NDIlib_recv_color_format_RGBX_RGBA;
-        (NDIlib_recv_color_format_e.NDIlib_recv_color_format_UYVY_RGBA << 32) |
-            NDIlib_recv_color_format_e.NDIlib_recv_color_format_UYVY_RGBA;
+        NDIlib_recv_color_format_e.NDIlib_recv_color_format_BGRX_BGRA;
     recvDescription.ref.bandwidth =
         NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_lowest;
     // NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_highest;
@@ -265,15 +265,15 @@ abstract class FlutterNdi {
       switch (libNDI.NDIlib_recv_capture_v3(
           Receiver, vFrame, nullptr, mFrame, 1000)) {
         case NDIlib_frame_type_e.NDIlib_frame_type_none:
-          debugPrint("Got empty frame");
+          // debugPrint("Got empty frame");
           break;
 
         case NDIlib_frame_type_e.NDIlib_frame_type_video:
-          debugPrint("Got video frame");
+          // debugPrint("Got video frame");
 
           switch (vFrame.ref.FourCC) {
             case NDIlib_FourCC_video_type_e.NDIlib_FourCC_type_BGRX:
-              debugPrint("FourCC :: BGRX");
+              // debugPrint("FourCC :: BGRX");
               break;
             default:
               debugPrint("FourCC :: ${vFrame.ref.FourCC} (unresolved)");
