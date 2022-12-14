@@ -192,11 +192,8 @@ typedef struct NDIlib_source_t {
 	// the API internally will instantiate a finder that is used to discover it even if it is not yet
 	// available on the network.
 	// The current way of addressing the value.
-		const char* p_url_address;
+	const char* p_url_address;
 
-		// We used to use an IP address before we used the more general URL notification this is now
-		// depreciated but maintained for compatibility.
-		PROCESSINGNDILIB_DEPRECATED const char* p_ip_address;
 
 #if NDILIB_CPP_DEFAULT_CONSTRUCTORS
 	NDIlib_source_t(const char* p_ndi_name_ = NULL, const char* p_url_address_ = NULL);

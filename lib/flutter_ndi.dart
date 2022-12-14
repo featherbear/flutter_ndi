@@ -109,54 +109,21 @@ abstract class FlutterNdi {
 
     debugPrint("Found ${numSources.value} sources");
 
-    bool isValidAddress(String str) {
-      final splitIdx = str.lastIndexOf(":");
-      if (splitIdx == -1) return false;
-
-      // ipv4 rn
-      try {
-        Uri.parseIPv4Address(str.substring(0, splitIdx));
-      } catch (ex) {
-        debugPrint("Failed to parse ${ex.toString()}");
-        return false;
-      }
-
-      final port = int.tryParse(str.substring(splitIdx + 1));
-      if (port == null || port < 1 || port > 65535) return false;
-
-      return true;
-    }
-
     for (var i = 0; i < numSources.value; i++) {
       try {
         NDIlib_source_t source_t = sources.elementAt(i).ref;
         var sourceName = source_t.p_ndi_name.cast<Utf8>().toDartString();
         var sourceAddress = source_t.p_url_address.cast<Utf8>().toDartString();
 
-        // debugPrint("Original source address :: ${sourceAddress}");
-        if (!isValidAddress(sourceAddress)) {
-          // debugPrint("Fixing bad source resolution");
-          final _sourceName = sourceName;
-          sourceName = sourceAddress;
-          sourceAddress = _sourceName;
-        }
-
         final source = NDISource(name: sourceName, address: sourceAddress);
 
-/**
-  I/flutter ( 6731): Searching for NDI sources
-  I/flutter ( 6731): Found 4 sources
-  I/flutter ( 6731): Discovered: RND-ANDREW (Intel UHD Graphics 620 1) @ 10.13.11.38:5962
-  I/flutter ( 6731): Discovered: 10.13.11.38:5963 @ RND-ANDREW (Intel UHD Graphics 620 3)
-  I/flutter ( 6731): Discovered: RND-ANDREW (Webcam NDI) @ 10.13.11.38:5961
-  I/flutter ( 6731): Couldn't unpack source 
- */
         debugPrint("Discovered: ${source.name} @ ${source.address}");
 
         historicalSources[sourceAddress] = new Tuple2(source, DateTime.now());
         if (ignorePrevious) discoveredSources.add(source);
       } catch (ex) {
         debugPrint("Couldn't unpack source");
+        debugPrint(ex.toString());
       }
     }
 
@@ -220,9 +187,7 @@ abstract class FlutterNdi {
       Completer controlSend__future = new Completer();
       _controlRecv.first.then((value) => controlSend__future.complete(value));
       controlSend = await controlSend__future.future;
-      debugPrint("Got controlSend at ${controlSend.hashCode}");
 
-      // controlSend = value
       // Set tear-down function
       activeThreads[dataSource] = () {
         activeThreads.remove(dataSource);
@@ -231,7 +196,6 @@ abstract class FlutterNdi {
       };
     });
 
-    debugPrint("RET");
     return new Tuple2(dataSource, controlSend);
   }
 
@@ -251,8 +215,6 @@ abstract class FlutterNdi {
     // A ReceivePort can't be sent over Isolate messages
     // So instead we send a SendPort `controlPort`
     ReceivePort _controlPort = new ReceivePort();
-    debugPrint(
-        "Notifying control port of receive port (${_controlPort.hashCode}) send at (${_controlPort.sendPort.hashCode})");
     (map['controlPort'] as SendPort).send(_controlPort.sendPort);
 
     NDIlib_recv_instance_t Receiver =
@@ -288,6 +250,8 @@ abstract class FlutterNdi {
     });
 
     while (active) {
+      // Could potentially just not request for a video frame until we're ready
+
       switch (libNDI.NDIlib_recv_capture_v3(
           Receiver, vFrame, aFrame, mFrame, 1000)) {
         case NDIlib_frame_type_e.NDIlib_frame_type_none:
