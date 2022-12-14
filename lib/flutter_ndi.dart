@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
 import 'dart:ffi';
@@ -7,6 +8,7 @@ import 'dart:typed_data';
 import 'package:ffi/ffi.dart';
 import 'dart:isolate';
 import 'package:tuple/tuple.dart';
+import 'dart:core';
 
 import 'dart:io';
 
@@ -65,16 +67,17 @@ abstract class FlutterNdi {
     }
   }
 
-  static Pointer<Void> createSendHandle(String sourceName) {
+  static Pointer<NDIlib_send_instance_type> createSendHandle(
+      String sourceName) {
     final source_data = calloc<NDIlib_send_create_t>();
-    source_data.ref.p_ndi_name = sourceName.toNativeUtf8().cast<Int8>();
+    source_data.ref.p_ndi_name = sourceName.toNativeUtf8().cast<Char>();
 
     return libNDI.NDIlib_send_create(source_data);
   }
 
-  static Pointer<Void> createSourceFinder() {
+  static Pointer<NDIlib_find_instance_type> createSourceFinder() {
     final finder_data = calloc<NDIlib_find_create_t>();
-    finder_data.ref.show_local_sources = true_1;
+    finder_data.ref.show_local_sources = true;
     var result = libNDI.NDIlib_find_create_v2(finder_data);
     return result;
     // calloc.free(finder_data);
@@ -91,25 +94,37 @@ abstract class FlutterNdi {
   }
 
   static List<NDISource> findSources(
-      {Pointer<Void>? sourceFinder, bool onlyImmediate = false}) {
+      {Pointer<NDIlib_find_instance_type>? sourceFinder,
+      bool ignorePrevious = false}) {
     var __orig_sourceFinder = sourceFinder;
     if (sourceFinder == null) sourceFinder = createSourceFinder();
 
+    debugPrint("Searching for NDI sources");
     libNDI.NDIlib_find_wait_for_sources(sourceFinder, 2000);
+
     List<NDISource> discoveredSources = [];
     Pointer<Uint32> numSources = malloc<Uint32>();
     Pointer<NDIlib_source_t> sources =
         libNDI.NDIlib_find_get_current_sources(sourceFinder, numSources);
+
+    debugPrint("Found ${numSources.value} sources");
+
     for (var i = 0; i < numSources.value; i++) {
-      NDIlib_source_t source_t = sources.elementAt(i).ref;
-      var sourceAddress = source_t.p_url_address.cast<Utf8>().toDartString();
-      NDISource source = new NDISource(
-          name: source_t.p_ndi_name.cast<Utf8>().toDartString(),
-          address: sourceAddress);
+      try {
+        NDIlib_source_t source_t = sources.elementAt(i).ref;
+        var sourceName = source_t.p_ndi_name.cast<Utf8>().toDartString();
+        var sourceAddress = source_t.p_url_address.cast<Utf8>().toDartString();
 
-      historicalSources[sourceAddress] = new Tuple2(source, DateTime.now());
+        final source = NDISource(name: sourceName, address: sourceAddress);
 
-      if (onlyImmediate) discoveredSources.add(source);
+        debugPrint("Discovered: ${source.name} @ ${source.address}");
+
+        historicalSources[sourceAddress] = new Tuple2(source, DateTime.now());
+        if (ignorePrevious) discoveredSources.add(source);
+      } catch (ex) {
+        debugPrint("Couldn't unpack source");
+        debugPrint(ex.toString());
+      }
     }
 
     malloc.free(numSources);
@@ -121,47 +136,67 @@ abstract class FlutterNdi {
       // calloc.free(sourceFinder);
     }
 
-    return onlyImmediate ? discoveredSources : getDiscoveredSources();
+    return ignorePrevious ? discoveredSources : getDiscoveredSources();
   }
 
-  static ReceivePort listenToFrameData(NDISource source) {
-    var source_t = malloc<NDIlib_source_t>();
+  static Future<Tuple2<ReceivePort, SendPort>> subscribe(
+      NDISource source) async {
+    debugPrint("listenToFrameData :: ${source.name}");
 
-    source_t.ref.p_ndi_name = source.name.toNativeUtf8().cast<Int8>();
-    source_t.ref.p_url_address = source.address.toNativeUtf8().cast<Int8>();
+    final source_t = calloc<NDIlib_source_t>();
+    source_t.ref.p_ndi_name = source.name.toNativeUtf8().cast<Char>();
+    // source_t.ref.p_url_address = source.address.toNativeUtf8().cast<Char>();
 
-    var recvDescription = malloc<NDIlib_recv_create_v3_t>();
+    var recvDescription = calloc<NDIlib_recv_create_v3_t>();
     recvDescription.ref.source_to_connect_to = source_t.ref;
+
+    // FIXME: Changing this value doesn't seem to change the received FourCC
     recvDescription.ref.color_format =
-        NDIlib_recv_color_format_e.NDIlib_recv_color_format_RGBX_RGBA;
+        NDIlib_recv_color_format_e.NDIlib_recv_color_format_BGRX_BGRA;
     recvDescription.ref.bandwidth =
         NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_lowest;
     // NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_highest;
-    recvDescription.ref.allow_video_fields = false_1;
-    recvDescription.ref.p_ndi_recv_name =
-        "Channel 1".toNativeUtf8().cast<Int8>();
 
-    Pointer<Void> Receiver =
+    recvDescription.ref.allow_video_fields = false;
+
+    recvDescription.ref.p_ndi_recv_name =
+        "Channel 1".toNativeUtf8().cast<Char>();
+
+    debugPrint("Creating receiver instance");
+
+    NDIlib_recv_instance_t Receiver =
         libNDI.NDIlib_recv_create_v4(recvDescription, nullptr);
 
-    // malloc.free(source_t);
-    // malloc.free(recvDescription)
+    debugPrint("Created instance");
 
-    ReceivePort _receivePort = new ReceivePort();
-    ReceivePort _controlPort = new ReceivePort();
-    Isolate.spawn(_receiverThread, {
-      'port': _receivePort.sendPort,
-      'controlPort': _controlPort.sendPort,
+    if (Receiver.address == 0) {
+      throw Exception("Could not create NDI receiver instance");
+    }
+
+    ReceivePort dataSource = new ReceivePort();
+    ReceivePort _controlRecv = new ReceivePort();
+
+    late SendPort controlSend;
+
+    // eye-so-let
+    await Isolate.spawn(_receiverThread, {
+      'port': dataSource.sendPort,
+      'controlPort': _controlRecv.sendPort,
       'receiver': Receiver.address,
-    }).then((isolate) {
-      activeThreads[_receivePort] = () {
-        activeThreads.remove(_receivePort);
-        _receivePort.close();
-        _controlPort.first.then((value) => (value as SendPort).send(null));
+    }).then((isolate) async {
+      Completer controlSend__future = new Completer();
+      _controlRecv.first.then((value) => controlSend__future.complete(value));
+      controlSend = await controlSend__future.future;
+
+      // Set tear-down function
+      activeThreads[dataSource] = () {
+        activeThreads.remove(dataSource);
+        dataSource.close();
+        controlSend.send(false);
       };
     });
 
-    return _receivePort;
+    return new Tuple2(dataSource, controlSend);
   }
 
   static void stopListen(ReceivePort port) {
@@ -176,63 +211,101 @@ abstract class FlutterNdi {
   //http://a5.ua/blog/how-use-isolates-flutter
   // https://api.flutter.dev/flutter/dart-isolate/Isolate-class.html
 
-  static void _receiverThread(Map map) {
-    Pointer<Void> Receiver = Pointer<Void>.fromAddress(map['receiver']);
+  static void _receiverThread(Map map) async {
+    // A ReceivePort can't be sent over Isolate messages
+    // So instead we send a SendPort `controlPort`
+    ReceivePort _controlPort = new ReceivePort();
+    (map['controlPort'] as SendPort).send(_controlPort.sendPort);
+
+    NDIlib_recv_instance_t Receiver =
+        NDIlib_recv_instance_t.fromAddress(map['receiver']);
     SendPort emitter = map['port'];
 
     bool active = true;
+    bool decoderReady = true;
 
-    // Can't send ReceivePorts over Isolate messages
-    // So instead we send a SendPort, which sends back a reply SendPort
-    // When the reply SendPort is called, then set active to false;
-    SendPort control = map['controlPort'];
-    ReceivePort stopSignal = new ReceivePort();
-    control.send(stopSignal.sendPort);
-    stopSignal.first.then((value) => (active = false));
-
+    int receivedVFrames = 0;
     // NDIlib_send_is_keyframe_required
 
     var vFrame = malloc<NDIlib_video_frame_v2_t>();
-    var aFrame = malloc<NDIlib_audio_frame_v2_t>();
+    var aFrame = malloc<NDIlib_audio_frame_v3_t>();
     var mFrame = malloc<NDIlib_metadata_frame_t>();
 
+    _controlPort.listen((msg) {
+      switch (msg) {
+        case false:
+          // msg == false --> Stop
+          {
+            debugPrint("Stop signal received");
+            active = false;
+            break;
+          }
+        case true:
+          // msg == true --> decode ready
+          {
+            decoderReady = true;
+            break;
+          }
+      }
+    });
+
     while (active) {
-      // What if multiple types were received? memory leak?
+      // Could potentially just not request for a video frame until we're ready
+
       switch (libNDI.NDIlib_recv_capture_v3(
-          Receiver, vFrame, nullptr, mFrame, 1000)) {
+          Receiver, vFrame, aFrame, mFrame, 1000)) {
         case NDIlib_frame_type_e.NDIlib_frame_type_none:
+          // debugPrint("Got empty frame");
           break;
+
         case NDIlib_frame_type_e.NDIlib_frame_type_video:
+          receivedVFrames++;
+          // debugPrint("Got video frame $receivedVFrames");
+
+          switch (vFrame.ref.FourCC) {
+            case NDIlib_FourCC_video_type_e.NDIlib_FourCC_type_BGRX:
+              // debugPrint("FourCC :: BGRX");
+              break;
+            default:
+              debugPrint("FourCC :: ${vFrame.ref.FourCC} (unresolved)");
+          }
+
           int yres = vFrame.ref.yres;
           int xres = vFrame.ref.xres;
-          double dpi = 96.0 * vFrame.ref.picture_aspect_ratio / (xres / yres);
-          int stride =
-              vFrame.ref.data_size_if_fourcc_compressed_else_line_stride;
-          // Stride = bytes per line
-          // Should be 4 * width -- BGRA
 
-          emitter.send(VideoFrameData(
-              width: xres,
-              height: yres,
-              data: Uint8List.fromList(
-                  vFrame.ref.p_data.asTypedList(yres * stride))));
+          if (decoderReady) {
+            decoderReady = false;
+            emitter.send(VideoFrameData(
+                width: xres,
+                height: yres,
+                data: Uint8List.fromList(vFrame.ref.p_data
+                    .asTypedList(yres * vFrame.ref.line_stride_in_bytes))));
+          }
 
           libNDI.NDIlib_recv_free_video_v2(Receiver, vFrame);
-
-          ///
-
           break;
+
         case NDIlib_frame_type_e.NDIlib_frame_type_audio:
-          libNDI.NDIlib_recv_free_audio_v2(Receiver, aFrame);
+          // debugPrint("Got audio frame");
+          libNDI.NDIlib_recv_free_audio_v3(Receiver, aFrame);
           break;
+
         case NDIlib_frame_type_e.NDIlib_frame_type_metadata:
+          debugPrint("Got metadata frame");
           libNDI.NDIlib_recv_free_metadata(Receiver, mFrame);
           break;
+
         case NDIlib_frame_type_e.NDIlib_frame_type_error:
+          debugPrint("Got error frame");
           break;
+
         case NDIlib_frame_type_e.NDIlib_frame_type_status_change:
+          debugPrint("Got status change frame");
           break;
       }
+
+// Pass control to the event queue to allocate the controlPort some time to receive
+      await Future(() {});
     }
 
     malloc.free(vFrame);

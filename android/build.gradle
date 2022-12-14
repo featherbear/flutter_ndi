@@ -2,6 +2,9 @@ group 'com.example.flutter_ndi'
 version '1.0'
 
 buildscript {
+
+    ext.kotlin_version = '1.6.0'
+
     repositories {
         google()
         jcenter()
@@ -22,7 +25,7 @@ rootProject.allprojects {
 apply plugin: 'com.android.library'
 
 android {
-    compileSdkVersion 30
+    compileSdkVersion 31
 
     defaultConfig {
         minSdkVersion 16
