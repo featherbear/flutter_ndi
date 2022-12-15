@@ -36,6 +36,8 @@ class VideoFrameData {
       {required this.width, required this.height, required this.data});
 }
 
+enum NDIBandwidth { full, low, audio_only, metadata_only }
+
 abstract class FlutterNdi {
   static bool isLoaded = false;
 
@@ -140,7 +142,9 @@ abstract class FlutterNdi {
   }
 
   static Future<Tuple2<ReceivePort, SendPort>> subscribe(
-      NDISource source) async {
+      {required NDISource source,
+      String recvName = "Channel 1",
+      NDIBandwidth bandwidth = NDIBandwidth.full}) async {
     debugPrint("listenToFrameData :: ${source.name}");
 
     final source_t = calloc<NDIlib_source_t>();
@@ -153,14 +157,24 @@ abstract class FlutterNdi {
     // FIXME: Changing this value doesn't seem to change the received FourCC
     recvDescription.ref.color_format =
         NDIlib_recv_color_format_e.NDIlib_recv_color_format_BGRX_BGRA;
-    recvDescription.ref.bandwidth =
-        NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_lowest;
-    // NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_highest;
+
+    recvDescription.ref.bandwidth = () {
+      switch (bandwidth) {
+        case NDIBandwidth.audio_only:
+          return NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_audio_only;
+        case NDIBandwidth.metadata_only:
+          return NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_metadata_only;
+        case NDIBandwidth.low:
+          return NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_lowest;
+        case NDIBandwidth.full:
+        default:
+          return NDIlib_recv_bandwidth_e.NDIlib_recv_bandwidth_highest;
+      }
+    }();
 
     recvDescription.ref.allow_video_fields = false;
 
-    recvDescription.ref.p_ndi_recv_name =
-        "Channel 1".toNativeUtf8().cast<Char>();
+    recvDescription.ref.p_ndi_recv_name = recvName.toNativeUtf8().cast<Char>();
 
     debugPrint("Creating receiver instance");
 
